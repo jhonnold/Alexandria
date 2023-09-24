@@ -2,6 +2,17 @@
 #include "board.h"
 #include <algorithm>
 
+const int piece_phase[] = { 0,3,3,5,10,0 };
+
+int GetPhase(const S_Board* pos) {
+    int knights = CountBits(GetPieceBB(pos, KNIGHT));
+    int bishops = CountBits(GetPieceBB(pos, BISHOP));
+    int rooks = CountBits(GetPieceBB(pos, ROOK));
+    int queens = CountBits(GetPieceBB(pos, QUEEN));
+
+    return knights * piece_phase[KNIGHT] + bishops * piece_phase[BISHOP] + rooks * piece_phase[ROOK] + queens * piece_phase[QUEEN];
+}
+
 // if we don't have enough material to mate consider the position a draw
 bool MaterialDraw(const S_Board* pos) {
     // If we only have kings on the board then it's a draw
@@ -31,7 +42,7 @@ static inline float MaterialScale(const S_Board* pos) {
 int EvalPosition(const S_Board* pos) {
     bool stm = (pos->side == WHITE);
     int eval = nnue.output(pos->accumulator, stm);
-    eval = (eval * MaterialScale(pos)) / 1024;
+    eval = eval * (128 + GetPhase(pos)) / 128;
     eval = eval * (200 - pos->Get50mrCounter()) / 200;
     // Clamp eval to avoid it somehow being a mate score
     eval = std::clamp(eval, -mate_score + 1, mate_score - 1);

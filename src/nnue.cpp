@@ -35,6 +35,10 @@ int32_t NNUE::SCReLU(int16_t x) {
     return wide * wide;
 }
 
+int16_t NNUE::ReLU(int16_t x) {
+    return x > 0 ? x : 0;
+}
+
 void NNUE::init(const char* file) {
     // open the nn file
     FILE* nn = fopen(file, "rb");
@@ -44,18 +48,11 @@ void NNUE::init(const char* file) {
         // initialize an accumulator for every input of the second layer
         size_t read = 0;
         size_t fileSize = sizeof(Network);
-        size_t objectsExpected = fileSize / sizeof(int16_t);
 
         read += fread(net.featureWeights, sizeof(int16_t), INPUT_WEIGHTS * HIDDEN_SIZE, nn);
         read += fread(net.featureBias, sizeof(int16_t), HIDDEN_SIZE, nn);
         read += fread(net.outputWeights, sizeof(int16_t), HIDDEN_SIZE * 2, nn);
-        read += fread(&net.outputBias, sizeof(int16_t), 1, nn);
-
-        if (read != objectsExpected) {
-            std::cout << "Error loading the net, aborting ";
-            std::cout << "Expected " << objectsExpected << " shorts, got " << read << "\n";
-            exit(1);
-        }
+        read += fread(&net.outputBias, sizeof(int32_t), 1, nn);
 
         // after reading the config we can close the file
         fclose(nn);
@@ -69,7 +66,7 @@ void NNUE::init(const char* file) {
 
         std::memcpy(net.outputWeights, &gEVALData[memoryIndex], HIDDEN_SIZE * sizeof(int16_t) * 2);
         memoryIndex += HIDDEN_SIZE * sizeof(int16_t) * 2;
-        std::memcpy(&net.outputBias, &gEVALData[memoryIndex], 1 * sizeof(int16_t));
+        std::memcpy(&net.outputBias, &gEVALData[memoryIndex], 1 * sizeof(int32_t));
     }
 }
 
@@ -126,13 +123,13 @@ int32_t NNUE::output(const NNUE::accumulator& board_accumulator, bool whiteToMov
     }
     int32_t output = 0;
     for (int i = 0; i < HIDDEN_SIZE; i++) {
-        output += SCReLU(us[i]) * static_cast<int32_t>(net.outputWeights[i]);
+        output += ReLU(us[i]) * static_cast<int32_t>(net.outputWeights[i]);
     }
     for (int i = 0; i < HIDDEN_SIZE; i++) {
-        output += SCReLU(them[i]) * static_cast<int32_t>(net.outputWeights[HIDDEN_SIZE + i]);
+        output += ReLU(them[i]) * static_cast<int32_t>(net.outputWeights[HIDDEN_SIZE + i]);
     }
-    int32_t unsquared = output / 255 + net.outputBias;
-    return unsquared * 400 / (64 * 255);
+
+    return (output + net.outputBias) / (16 * 256);
 }
 
 std::pair<std::size_t, std::size_t> NNUE::GetIndex(int piece, int square) {
